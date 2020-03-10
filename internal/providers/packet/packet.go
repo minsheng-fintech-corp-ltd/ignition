@@ -68,7 +68,7 @@ func FetchConfig(f *resource.Fetcher) (types.Config, report.Report, error) {
 }
 
 // PostStatus posts a message that will show on the Packet Instance Timeline
-func PostStatus(stageName string, f resource.Fetcher, errMsg error) error {
+func PostStatus(stageName string, f *resource.Fetcher, errMsg error) error {
 	f.Logger.Info("POST message to Packet Timeline")
 	// fetch JSON from https://metadata.packet.net/metadata
 	headers := make(http.Header)

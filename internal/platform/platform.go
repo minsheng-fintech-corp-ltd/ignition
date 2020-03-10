@@ -60,15 +60,15 @@ func (c Config) NewFetcherFunc() providers.FuncNewFetcher {
 	if c.newFetcher != nil {
 		return c.newFetcher
 	}
-	return func(l *log.Logger) (resource.Fetcher, error) {
-		return resource.Fetcher{
+	return func(l *log.Logger) (*resource.Fetcher, error) {
+		return &resource.Fetcher{
 			Logger: l,
 		}, nil
 	}
 }
 
 // Status takes a Fetcher and the error from Run (from engine)
-func (c Config) Status(stageName string, f resource.Fetcher, statusErr error) error {
+func (c Config) Status(stageName string, f *resource.Fetcher, statusErr error) error {
 	if c.status != nil {
 		return c.status(stageName, f, statusErr)
 	}
