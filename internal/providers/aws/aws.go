@@ -20,9 +20,7 @@ package aws
 import (
 	"net/url"
 
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/coreos/ignition/v2/config/v3_2_experimental/types"
-	"github.com/coreos/ignition/v2/internal/log"
 	"github.com/coreos/ignition/v2/internal/providers/util"
 	"github.com/coreos/ignition/v2/internal/resource"
 	"github.com/coreos/vcontext/report"
@@ -43,16 +41,4 @@ func FetchConfig(f *resource.Fetcher) (types.Config, report.Report, error) {
 	}
 
 	return util.ParseConfig(f.Logger, data)
-}
-
-func NewFetcher(l *log.Logger) (*resource.Fetcher, error) {
-	sess, err := session.NewSession()
-	if err != nil {
-		return nil, err
-	}
-
-	return &resource.Fetcher{
-		Logger:     l,
-		AWSSession: sess,
-	}, nil
 }

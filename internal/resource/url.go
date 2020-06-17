@@ -72,11 +72,6 @@ type Fetcher struct {
 	// timeouts Ignition was configured to used will be ignored.
 	client *HttpClient
 
-	// The AWS Session to use when fetching resources from S3. If left nil, the
-	// first S3 object that is fetched will initialize the field. This can be
-	// used to set credentials.
-	AWSSession *session.Session
-
 	// Whether to only attempt fetches which can be performed offline. This
 	// currently only includes the "data" scheme. Other schemes will result in
 	// ErrNeedNet. In the future, we can improve on this by dropping this
@@ -348,7 +343,13 @@ func (f *Fetcher) fetchFromS3(u url.URL, dest s3target, opts FetchOptions) error
 		Key:       &u.Path,
 		VersionId: versionId,
 	}
-	err := f.fetchFromS3WithCreds(ctx, dest, input, f.AWSSession)
+
+	sess, err := session.NewSession()
+	if err != nil {
+		return err
+	}
+
+	err = f.fetchFromS3WithCreds(ctx, dest, input, sess)
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok {
 			if aerr.Code() == "NotFound" || aerr.Code() == "InvalidAccessKeyId" {
