@@ -8,7 +8,7 @@ The Ignition configuration is a JSON document conforming to the following specif
   * **version** (string): the semantic version number of the spec. The spec version must be compatible with the latest version (`3.2.0-experimental`). Compatibility requires the major versions to match and the spec version be less than or equal to the latest version. `-experimental` versions compare less than the final version with the same number, and previous experimental versions are not accepted.
   * **_config_** (objects): options related to the configuration.
     * **_merge_** (list of objects): a list of the configs to be merged to the current config.
-      * **source** (string): the URL of the config. Supported schemes are `http`, `https`, `s3`, `tftp`, and [`data`][rfc2397]. Note: When using `http`, it is advisable to use the verification option to ensure the contents haven't been modified.
+      * **source** (string): the URL of the config. Supported schemes are `http`, `https`, `s3`, `gs`, `tftp`, and [`data`][rfc2397]. Note: When using `http`, it is advisable to use the verification option to ensure the contents haven't been modified.
       * **_compression_** (string): the type of compression used on the config (null or gzip). Compression cannot be used with S3.
       * **_httpHeaders_** (list of objects): a list of HTTP headers to be added to the request. Available for `http` and `https` source schemes only.
         * **name** (string): the header name.
@@ -16,7 +16,7 @@ The Ignition configuration is a JSON document conforming to the following specif
       * **_verification_** (object): options related to the verification of the config.
         * **_hash_** (string): the hash of the config, in the form `<type>-<value>` where type is either `sha512` or `sha256`.
     * **_replace_** (object): the config that will replace the current.
-      * **source** (string): the URL of the config. Supported schemes are `http`, `https`, `s3`, `tftp`, and [`data`][rfc2397]. Note: When using `http`, it is advisable to use the verification option to ensure the contents haven't been modified.
+      * **source** (string): the URL of the config. Supported schemes are `http`, `https`, `s3`, `gs`, `tftp`, and [`data`][rfc2397]. Note: When using `http`, it is advisable to use the verification option to ensure the contents haven't been modified.
       * **_compression_** (string): the type of compression used on the config (null or gzip). Compression cannot be used with S3.
       * **_httpHeaders_** (list of objects): a list of HTTP headers to be added to the request. Available for `http` and `https` source schemes only.
         * **name** (string): the header name.
@@ -29,7 +29,7 @@ The Ignition configuration is a JSON document conforming to the following specif
   * **_security_** (object): options relating to network security.
     * **_tls_** (object): options relating to TLS when fetching resources over `https`.
       * **_certificateAuthorities_** (list of objects): the list of additional certificate authorities (in addition to the system authorities) to be used for TLS verification when fetching over `https`. All certificate authorities must have a unique `source`.
-        * **source** (string): the URL of the certificate bundle (in PEM format). The bundle can contain multiple concatenated certificates. Supported schemes are `http`, `https`, `s3`, `tftp`, and [`data`][rfc2397]. Note: When using `http`, it is advisable to use the verification option to ensure the contents haven't been modified.
+        * **source** (string): the URL of the certificate bundle (in PEM format). The bundle can contain multiple concatenated certificates. Supported schemes are `http`, `https`, `s3`, `gs`, `tftp`, and [`data`][rfc2397]. Note: When using `http`, it is advisable to use the verification option to ensure the contents haven't been modified.
         * **_compression_** (string): the type of compression used on the certificate (null or gzip). Compression cannot be used with S3.
         * **_httpHeaders_** (list of objects): a list of HTTP headers to be added to the request. Available for `http` and `https` source schemes only.
           * **name** (string): the header name.
@@ -73,7 +73,7 @@ The Ignition configuration is a JSON document conforming to the following specif
     * **_overwrite_** (boolean): whether to delete preexisting nodes at the path. `contents.source` must be specified if `overwrite` is true. Defaults to false.
     * **_contents_** (object): options related to the contents of the file.
       * **_compression_** (string): the type of compression used on the contents (null or gzip). Compression cannot be used with S3.
-      * **_source_** (string): the URL of the file contents. Supported schemes are `http`, `https`, `tftp`, `s3`, and [`data`][rfc2397]. When using `http`, it is advisable to use the verification option to ensure the contents haven't been modified. If source is omitted and a regular file already exists at the path, Ignition will do nothing. If source is omitted and no file exists, an empty file will be created.
+      * **_source_** (string): the URL of the file contents. Supported schemes are `http`, `https`, `tftp`, `s3`, `gs`, and [`data`][rfc2397]. When using `http`, it is advisable to use the verification option to ensure the contents haven't been modified. If source is omitted and a regular file already exists at the path, Ignition will do nothing. If source is omitted and no file exists, an empty file will be created.
       * **_httpHeaders_** (list of objects): a list of HTTP headers to be added to the request. Available for `http` and `https` source schemes only.
         * **name** (string): the header name.
         * **_value_** (string): the header contents.
@@ -81,7 +81,7 @@ The Ignition configuration is a JSON document conforming to the following specif
         * **_hash_** (string): the hash of the contents, in the form `<type>-<value>` where type is either `sha512` or `sha256`.
     * **_append_** (list of objects): list of contents to be appended to the file. Follows the same stucture as `contents`
       * **_compression_** (string): the type of compression used on the contents (null or gzip). Compression cannot be used with S3.
-      * **_source_** (string): the URL of the contents to append. Supported schemes are `http`, `https`, `tftp`, `s3`, and [`data`][rfc2397]. When using `http`, it is advisable to use the verification option to ensure the contents haven't been modified.
+      * **_source_** (string): the URL of the contents to append. Supported schemes are `http`, `https`, `tftp`, `s3`, `gs`, and [`data`][rfc2397]. When using `http`, it is advisable to use the verification option to ensure the contents haven't been modified.
       * **_httpHeaders_** (list of objects): a list of HTTP headers to be added to the request. Available for `http` and `https` source schemes only.
         * **name** (string): the header name.
         * **_value_** (string): the header contents.
@@ -115,6 +115,26 @@ The Ignition configuration is a JSON document conforming to the following specif
       * **_name_** (string): the group name of the owner.
     * **target** (string): the target path of the link
     * **_hard_** (boolean): a symbolic link is created if this is false, a hard one if this is true.
+ * **_luks_** (list of objects): the list of luks devices to be created. Every device must have a unique `name`.
+    * **name** (string): the name of the luks device.
+    * **device** (string): the absolute path to the device. Devices are typically referenced by the `/dev/disk/by-*` symlinks.
+    * **_keyFile_** (string): options related to the contents of the key file.
+      * **_compression_** (string): the type of compression used on the contents (null or gzip). Compression cannot be used with S3.
+      * **_source_** (string): the URL of the contents to append. Supported schemes are `http`, `https`, `tftp`, `s3`, `gs`, and [`data`][rfc2397]. When using `http`, it is advisable to use the verification option to ensure the contents haven't been modified.
+      * **_httpHeaders_** (list of objects): a list of HTTP headers to be added to the request. Available for `http` and `https` source schemes only.
+        * **name** (string): the header name.
+        * **_value_** (string): the header contents.
+      * **_verification_** (object): options related to the verification of the key file.
+        * **_hash_** (string): the hash of the contents, in the form `<type>-<value>` where type is either `sha512` or `sha256`.
+    * **_label_** (string): the label of the luks device.
+    * **_uuid_** (string): the uuid of the luks device.
+    * **_options_** (list of strings): any additional options to be passed to the cryptsetup utility.
+    * **_clevis_** (object): describes the clevis configuration for the luks device.
+      * **_tang_** (list of objects): describes a tang server. Every server must have a unique `url`.
+        * **url** (string): url of the tang server.
+        * **thumbprint** (string): thumbprint of a trusted signing key.
+      * **_tpm2_** (bool): whether or not to use a tpm2 device.
+      * **_threshold_** (int): sets the minimum number of pieces required to decrypt the device.
 * **_systemd_** (object): describes the desired state of the systemd units.
   * **_units_** (list of objects): the list of systemd units.
     * **name** (string): the name of the unit. This must be suffixed with a valid unit type (e.g. "thing.service"). Every unit must have a unique `name`.

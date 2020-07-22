@@ -25,6 +25,7 @@ import (
 
 	"github.com/coreos/ignition/v2/config/v3_2_experimental/types"
 	"github.com/coreos/ignition/v2/internal/distro"
+	execUtil "github.com/coreos/ignition/v2/internal/exec/util"
 	"github.com/coreos/ignition/v2/internal/log"
 	"github.com/coreos/ignition/v2/internal/providers/util"
 	"github.com/coreos/ignition/v2/internal/resource"
@@ -52,12 +53,29 @@ const (
 	CDS_DISC_OK
 )
 
+// Azure uses a UDF volume for the OVF configuration.
+const (
+	CDS_FSTYPE_UDF = "udf"
+)
+
+// FetchConfig wraps FetchOvfDevice to implement the platform.NewFetcher interface.
 func FetchConfig(f *resource.Fetcher) (types.Config, report.Report, error) {
+	return FetchFromOvfDevice(f, []string{CDS_FSTYPE_UDF})
+}
+
+// FetchFromOvfDevice has the return signature of platform.NewFetcher. It is
+// wrapped by this and AzureStack packages.
+func FetchFromOvfDevice(f *resource.Fetcher, ovfFsTypes []string) (types.Config, report.Report, error) {
 	devicePath := filepath.Join(distro.DiskByIDDir(), configDeviceID)
 
 	logger := f.Logger
 	logger.Debug("waiting for config DVD...")
 	waitForCdrom(logger, devicePath)
+
+	fsType, err := checkOvfFsType(logger, devicePath, ovfFsTypes)
+	if err != nil {
+		return types.Config{}, report.Report{}, err
+	}
 
 	mnt, err := ioutil.TempDir("", "ignition-azure")
 	if err != nil {
@@ -67,7 +85,7 @@ func FetchConfig(f *resource.Fetcher) (types.Config, report.Report, error) {
 
 	logger.Debug("mounting config device")
 	if err := logger.LogOp(
-		func() error { return unix.Mount(devicePath, mnt, "udf", unix.MS_RDONLY, "") },
+		func() error { return unix.Mount(devicePath, mnt, fsType, unix.MS_RDONLY, "") },
 		"mounting %q at %q", devicePath, mnt,
 	); err != nil {
 		return types.Config{}, report.Report{}, fmt.Errorf("failed to mount device %q at %q: %v", devicePath, mnt, err)
@@ -125,4 +143,17 @@ func isCdromPresent(logger *log.Logger, devicePath string) bool {
 	}
 
 	return (status == CDS_DISC_OK)
+}
+
+func checkOvfFsType(logger *log.Logger, devicePath string, fsTypes []string) (string, error) {
+	fs, err := execUtil.GetFilesystemInfo(devicePath, false)
+	if err != nil {
+		return fs.Type, fmt.Errorf("failed to detect filesystem on ovf device %q: %v", devicePath, err)
+	}
+	for _, f := range fsTypes {
+		if f == fs.Type {
+			return fs.Type, nil
+		}
+	}
+	return fs.Type, fmt.Errorf("filesystem %q is not a supported ovf device", fs.Type)
 }

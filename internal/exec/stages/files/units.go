@@ -103,6 +103,9 @@ func (s *stage) createUnits(config types.Config) error {
 	}
 	// if we have presets then create the systemd preset file.
 	if len(presets) != 0 {
+		if err := s.relabelDirsForFile(filepath.Join(s.DestDir, util.PresetPath)); err != nil {
+			return err
+		}
 		if err := s.createSystemdPresetFile(presets); err != nil {
 			return err
 		}
@@ -183,7 +186,7 @@ func (s *stage) writeSystemdUnit(unit types.Unit, runtime bool) error {
 	return s.Logger.LogOp(func() error {
 		relabeledDropinDir := false
 		for _, dropin := range unit.Dropins {
-			if dropin.Contents == nil || *dropin.Contents == "" {
+			if dropin.Contents == nil {
 				continue
 			}
 			f, err := u.FileFromSystemdUnitDropin(unit, dropin, runtime)

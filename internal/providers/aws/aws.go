@@ -18,6 +18,7 @@
 package aws
 
 import (
+	"github.com/aws/aws-sdk-go/aws/session"
 	"net/url"
 
 	"github.com/coreos/ignition/v2/config/v3_2_experimental/types"

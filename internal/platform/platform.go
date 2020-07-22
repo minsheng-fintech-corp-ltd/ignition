@@ -22,6 +22,7 @@ import (
 	"github.com/coreos/ignition/v2/internal/providers/aliyun"
 	"github.com/coreos/ignition/v2/internal/providers/aws"
 	"github.com/coreos/ignition/v2/internal/providers/azure"
+	"github.com/coreos/ignition/v2/internal/providers/azurestack"
 	"github.com/coreos/ignition/v2/internal/providers/cloudstack"
 	"github.com/coreos/ignition/v2/internal/providers/digitalocean"
 	"github.com/coreos/ignition/v2/internal/providers/exoscale"
@@ -89,6 +90,10 @@ func init() {
 	configs.Register(Config{
 		name:  "azure",
 		fetch: azure.FetchConfig,
+	})
+	configs.Register(Config{
+		name:  "azurestack",
+		fetch: azurestack.FetchConfig,
 	})
 	configs.Register(Config{
 		name:  "brightbox",
