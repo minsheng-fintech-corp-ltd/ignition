@@ -18,17 +18,13 @@
 package aws
 
 import (
+	"github.com/aws/aws-sdk-go/aws/session"
 	"net/url"
 
 	"github.com/coreos/ignition/v2/config/v3_2_experimental/types"
 	"github.com/coreos/ignition/v2/internal/log"
 	"github.com/coreos/ignition/v2/internal/providers/util"
 	"github.com/coreos/ignition/v2/internal/resource"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/credentials/ec2rolecreds"
-	"github.com/aws/aws-sdk-go/aws/ec2metadata"
-	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/coreos/vcontext/report"
 )
 
@@ -46,24 +42,16 @@ func FetchConfig(f *resource.Fetcher) (types.Config, report.Report, error) {
 		return types.Config{}, report.Report{}, err
 	}
 
-	// Determine the partition and region this instance is in
-	regionHint, err := ec2metadata.New(f.AWSSession).Region()
-	if err != nil {
-		regionHint = "us-east-1"
-	}
-	f.S3RegionHint = regionHint
-
 	return util.ParseConfig(f.Logger, data)
 }
 
-func NewFetcher(l *log.Logger) (resource.Fetcher, error) {
-	sess, err := session.NewSession(&aws.Config{})
+func NewFetcher(l *log.Logger) (*resource.Fetcher, error) {
+	sess, err := session.NewSession()
 	if err != nil {
-		return resource.Fetcher{}, err
+		return nil, err
 	}
-	sess.Config.Credentials = ec2rolecreds.NewCredentials(sess)
 
-	return resource.Fetcher{
+	return &resource.Fetcher{
 		Logger:     l,
 		AWSSession: sess,
 	}, nil

@@ -21,6 +21,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/request"
 	"hash"
 	"io"
 	"io/ioutil"
@@ -40,7 +42,8 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/client"
+	"github.com/aws/aws-sdk-go/aws/ec2metadata"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
@@ -390,32 +393,6 @@ func (f *Fetcher) fetchFromS3(u url.URL, dest s3target, opts FetchOptions) error
 		defer cancelFn()
 	}
 
-	if f.AWSSession == nil {
-		var err error
-		f.AWSSession, err = session.NewSession(&aws.Config{
-			Credentials: credentials.AnonymousCredentials,
-		})
-		if err != nil {
-			return err
-		}
-	}
-	sess := f.AWSSession.Copy()
-
-	// Determine the partition and region this bucket is in
-	regionHint := "us-east-1"
-	if f.S3RegionHint != "" {
-		regionHint = f.S3RegionHint
-	}
-	region, err := s3manager.GetBucketRegion(ctx, sess, u.Host, regionHint)
-	if err != nil {
-		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == "NotFound" {
-			return fmt.Errorf("couldn't determine the region for bucket %q: %v", u.Host, err)
-		}
-		return err
-	}
-
-	sess.Config.Region = aws.String(region)
-
 	var versionId *string
 	if v, ok := u.Query()["versionId"]; ok && len(v) > 0 {
 		versionId = aws.String(v[0])
@@ -426,8 +403,20 @@ func (f *Fetcher) fetchFromS3(u url.URL, dest s3target, opts FetchOptions) error
 		Key:       &u.Path,
 		VersionId: versionId,
 	}
-	err = f.fetchFromS3WithCreds(ctx, dest, input, sess)
+	err := f.fetchFromS3WithCreds(ctx, dest, input, f.AWSSession)
 	if err != nil {
+		if aerr, ok := err.(awserr.Error); ok {
+			if aerr.Code() == "NotFound" || aerr.Code() == "InvalidAccessKeyId" {
+				//retry connecting to public bucket with Anonymous identity
+				//when fetch data from public bucket in different region.
+				sess, err := session.NewSession(&aws.Config{
+					Credentials: credentials.AnonymousCredentials,
+				})
+				if err = f.fetchFromS3WithCreds(ctx, dest, input, sess); err != nil {
+					return fmt.Errorf("couldn't determine the region for bucket %q: %v", *input.Bucket, err)
+				}
+			}
+		}
 		return err
 	}
 	if opts.Hash != nil {
@@ -453,24 +442,55 @@ func (f *Fetcher) fetchFromS3(u url.URL, dest s3target, opts FetchOptions) error
 }
 
 func (f *Fetcher) fetchFromS3WithCreds(ctx context.Context, dest s3target, input *s3.GetObjectInput, sess *session.Session) error {
+	// Determine the partition and region this instance is in
+	regionHint, err := ec2metadata.New(sess).Region()
+	if err != nil {
+		f.Logger.Debug("failed to fetch ec2 metadata: %v, using default region hint: us-east-1", err)
+		regionHint = "us-east-1"
+	}
+
+	region, err := s3manager.GetBucketRegion(ctx, sess, *input.Bucket, regionHint)
+	if err != nil {
+		f.Logger.Warning("failed to get bucket region,err: %v. using default region us-east-1", err)
+		region = "us-east-1"
+	}
+
 	httpClient, err := defaultHTTPClient()
 	if err != nil {
 		return err
 	}
 
-	awsConfig := aws.NewConfig().WithHTTPClient(httpClient)
+	awsConfig := aws.NewConfig().WithHTTPClient(httpClient).WithRegion(region)
+	awsConfig.Retryer = &S3Retryer{}
 	s3Client := s3.New(sess, awsConfig)
 	downloader := s3manager.NewDownloaderWithClient(s3Client)
 	if _, err := downloader.DownloadWithContext(ctx, dest, input); err != nil {
-		if awserrval, ok := err.(awserr.Error); ok && awserrval.Code() == "EC2RoleRequestError" {
-			// If this error was due to an EC2 role request error, try again
-			// with the anonymous credentials.
-			sess.Config.Credentials = credentials.AnonymousCredentials
-			return f.fetchFromS3WithCreds(ctx, dest, input, sess)
-		}
 		return err
 	}
 	return nil
+}
+
+type S3Retryer struct {
+	client.DefaultRetryer
+}
+
+// MaxRetries returns the configured number of NumMaxRetries, defaults to 3
+func (r S3Retryer) MaxRetries() int {
+	if r.NumMaxRetries <= 0 {
+		return 3
+	}
+	return r.NumMaxRetries
+}
+
+func (r S3Retryer) ShouldRetry(req *request.Request) bool {
+	if req.Error != nil {
+		if err, ok := req.Error.(awserr.Error); ok {
+			if err.Code() == "SerializationError" || err.Code() == "EC2RoleRequestError" {
+				return true
+			}
+		}
+	}
+	return r.DefaultRetryer.ShouldRetry(req)
 }
 
 // uncompress will wrap the given io.Reader in a decompresser specified in the

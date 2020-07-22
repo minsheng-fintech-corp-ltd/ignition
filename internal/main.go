@@ -95,11 +95,11 @@ func main() {
 		Logger:         &logger,
 		ConfigCache:    flags.configCache,
 		PlatformConfig: platformConfig,
-		Fetcher:        &fetcher,
+		Fetcher:        fetcher,
 	}
 
 	err = engine.Run(flags.stage.String())
-	if statusErr := engine.PlatformConfig.Status(flags.stage.String(), *engine.Fetcher, err); statusErr != nil {
+	if statusErr := engine.PlatformConfig.Status(flags.stage.String(), engine.Fetcher, err); statusErr != nil {
 		logger.Err("POST Status error: %v", statusErr.Error())
 	}
 	if err != nil {
